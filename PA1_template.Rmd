@@ -1,9 +1,3 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
 Load required packages
 ```{r}
 library(lattice)
@@ -46,17 +40,17 @@ The mean number of steps taken per day is **`r as.integer(Mean)`** while the med
 ```{r plotts, cache=TRUE}
 intval <- data[as.character(data$date)=="2012-10-01",]$interval
 intval_avg <- with(data, aggregate(steps, list(interval), mean, na.rm=TRUE))
-plot(intval, intval_avg$x, "l", col="blue", main="Steps per 5-min Interval", xlab="Interval", ylab="Steps", lwd=2)
+plot(intval, intval_avg$x, "l", main="Steps per 5-min Interval (averaged across all days)", xlab="Interval", ylab="Steps", lwd=2)
 ```
 
-From the plot, we see that steps taken are generally lower in the beginning and end of the entire recorded acitvity. There are some peaks, which could be due to a switch to a brisk from slow walk. 
+From the plot, we see that steps taken are generally lower in the beginning and end of the entire recorded acitvity. There are some peaks, which could be due to a switch to brisk from slow walking. 
 
 ```{r peakvalue}
 maxval <- max(intval_avg$x)
 max_intval <- intval[which.max(intval_avg$x)]
 ```
 
-The 5-min interval containing the maximum number of steps is the **`r max_intval`** interval at a maximum of **`r maxval`** steps.
+The average 5-min interval containing the maximum number of steps is the **`r max_intval`** interval at a maximum of **`r maxval`** steps.
 
 ## Imputing missing values
 
@@ -68,4 +62,76 @@ datasetlen <- length(data$steps)
 
 Out of **`r datasetlen`** entries in the entire dataset, there are **`r totalnas`** NA entries, that is quite a bit.
 
+Our strategy is to fill in the missing values by using the mean of that 5-minute interval, that is values from the plot above. 
+
+```{r fillna, cache=TRUE}
+intvalna <- data[is.na(data$steps),]$interval
+tofill <- intval_avg[intval_avg$Group.1 %in% intvalna,]
+data <- data[c("date", "steps", "interval")]
+datafilled <- data
+for (i in 1:nrow(datafilled)) {
+  if(is.na(datafilled$steps[i])) {
+    datafilled$steps[i] <- tofill$x[i]
+    }
+  }
+````
+
+Now, the new dataset has no NAs, we also print out the old dataset for comparison.
+```{r}
+head(datafilled, 20)
+head(data, 20)
+```
+
+Histogram plot for the dataset with NAs filled in:
+```{r plotstepday_nafilled, cache=TRUE}
+plotstepday_nona <- with(datafilled, aggregate(steps, list(date), sum))
+hist(plotstepday_nona$x, main="Histogram of Steps Taken Each Day", xlab="Total Number Each Day")
+```
+
+
+```{r averagesn_nafilled, cache=TRUE, results='asis', cache=TRUE}
+## Get the mean and median values for each day
+Mean  <-  mean(plotstepday_nona$x, na.rm=TRUE)
+Median <-  median(plotstepday_nona$x, na.rm=TRUE)
+```
+
+After imputing missing data, mean number of steps taken per day is **`r as.integer(Mean)`** while the median is **`r as.integer(Median)`** There seem to be no changes when using mean of the 5-min interval to imputing missing values.
+
 ## Are there differences in activity patterns between weekdays and weekends?
+We add a new column to distinguish weekdays from weekends, using the weekdays() function.
+```{r weekends, cache=TRUE}
+datafilled$dayweek <- weekdays(datafilled$date)
+datafilled$weekend <- datafilled$dayweek
+for (i in 1:nrow(datafilled)) {
+  if (datafilled$dayweek[i] == "Saturday" | datafilled$dayweek[i] == "Sunday") {
+    datafilled$weekend[i] <- "Weekend"
+  } else {
+    datafilled$weekend[i] <- "Weekday"
+  }
+}
+```
+
+Split weekday and weekend dataset and plot time series again.
+```{r plotts_weekend}
+weekdaydata <- datafilled[datafilled$weekend == "Weekday", ]
+weekenddata <- datafilled[datafilled$weekend == "Weekend", ]
+head(weekdaydata); head(weekenddata)
+weekday_avg <- with(weekdaydata, aggregate(steps, list(interval), mean, na.rm=TRUE))
+weekend_avg <- with(weekenddata, aggregate(steps, list(interval), mean, na.rm=TRUE))
+par(mfrow=c(2,1))
+plot(intval, weekday_avg$x, "l", main="Weekday", xlab="Interval", ylab="Steps", lwd=2)
+plot(intval, weekend_avg$x, "l", main="Weekend", xlab="Interval", ylab="Steps", lwd=2)
+```
+
+It can be a little difficult to make comparison from the panel plots, we plot both wekdays and weekends data into a single plot.
+
+```{r plotts_together}
+par(mfrow=c(1,1))
+plot(intval, weekday_avg$x, "l", main="Comparison", xlab="Interval", ylab="Steps", lwd=2)
+lines(intval, weekend_avg$x, col="blue", lwd=2)
+legend("topright", c("Weekday", "Weekend"), lty = 1, col = c("black", "blue"))
+```
+
+Clearly, the step counts throughout the day between weekends and weekdays are not the same. However, it is difficult to quantify if the differences are due random errors from the analysis we have done so far. 
+
+At least, we should be able to say that step counts increases at a later interval as compared to weekdays, maybe it is because people tend to start their day later in the weekends.
